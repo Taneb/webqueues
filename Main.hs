@@ -18,19 +18,18 @@ type QueueMapVar = TVar (M.Map UUID (TQueue ByteString))
 -- | 'getUUID' parses the uuid parameter - looking in capture, then in form
 -- data, then in query parameters - and parses it, failing with HTTP 400
 -- ("Bad Request") on parse failure.
-getUUID :: ActionM UUID
-getUUID = param "uuid" >>= maybe invalidUUIDfailure return . fromASCIIBytes
+getUUID :: (UUID -> ActionM ()) -> ActionM ()
+getUUID cont = param "uuid" >>= maybe invalidUUIDfailure cont . fromASCIIBytes
   where
     invalidUUIDfailure = do
       status badRequest400
-      fail "Invalid UUID"
+      text "Invalid UUID"
 
 -- | 'getAction' takes the next value from a queue and returns it with HTTP 200
 -- ("OK"), or if the queue is empty or non-existent, returns nothing with HTTP
 -- 204 ("No Content").
 getAction :: QueueMapVar -> ActionM ()
-getAction queuesRef = do
-  uuid <- getUUID
+getAction queuesRef = getUUID $ \uuid -> do
   res <- liftIO . atomically $ do
     queues <- readTVar queuesRef
     maybe (return Nothing) tryReadTQueue $ M.lookup uuid queues
@@ -39,8 +38,7 @@ getAction queuesRef = do
 -- | 'postAction' adds a value in the form field "value" to a queue, creating
 -- the queue if necessary, and then returns HTTP 200 ("OK").
 postAction :: QueueMapVar -> ActionM ()
-postAction queuesRef = do
-  uuid <- getUUID
+postAction queuesRef = getUUID $ \uuid -> do
   value <- param "value"
   liftIO . atomically $ do
     queues <- readTVar queuesRef
@@ -55,8 +53,7 @@ postAction queuesRef = do
 
 -- | 'deleteAction' deletes a queue, if it exists, and returns HTTP 200 ("OK").
 deleteAction :: QueueMapVar -> ActionM ()
-deleteAction queuesRef = do
-  uuid <- getUUID
+deleteAction queuesRef = getUUID $ \uuid ->
   liftIO . atomically $ modifyTVar' queuesRef $ M.delete uuid
 
 main :: IO ()
