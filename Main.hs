@@ -10,6 +10,7 @@ import Data.ByteString.Lazy (fromStrict)
 import qualified Data.Map.Strict as M
 import Data.UUID
 import Network.HTTP.Types.Status
+import System.Environment
 import Web.Scotty
 
 type QueueMapVar = TVar (M.Map UUID (TQueue ByteString))
@@ -60,8 +61,12 @@ deleteAction queuesRef = do
 
 main :: IO ()
 main = do
+  args <- getArgs
+  let port = case args of
+        [] -> 9123
+        [n] -> read n
   queuesRef <- newTVarIO M.empty
-  scotty 9123 $ do
+  scotty port $ do
     get "/:uuid" $ getAction queuesRef
     post "/:uuid" $ postAction queuesRef
     delete "/:uuid" $ deleteAction queuesRef
